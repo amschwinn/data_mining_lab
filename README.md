@@ -21,6 +21,9 @@
 	Exercise 1: Recommender systems
 	Exercise 2: Crime Analysis
 
+## Lab3 4:
+	Exercise 1: Predict soccer match outcomes with random forests
+
 ### References:
 	Based on lab in Data Mining course of Machine Learning and Data Mining (MLDM) Master's Program and University Jean Monnet. Lab taught by Dr. Fabrice Muhlenbach.
 
