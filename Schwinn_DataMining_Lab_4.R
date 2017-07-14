@@ -1,7 +1,11 @@
 #############################
 #Data Mining Practical Session
 #
-#Subject: Recommender Systems and Crime Analysis
+#Subject: RPredict Futbol match outcomes using 
+#Random Forests, Multilayer Perceptron Neural 
+#Network (MLP), K-Nearest Neighbor Classifiers, 
+#Naive Bayesian Classifier, and Multinomial 
+#Logisitc Regression (MLogit Regression).
 #
 #Author: Austin Schwinn
 #
@@ -22,11 +26,23 @@
 #install.packages('Hmisc')
 #install.packages('randomForest')
 #install.packages("snowfall")
+#install.packages('caret')
+#install.packages('doParallel')
+#install.packages('RSNNS')
+#install.packages('e1071')
+#install.packages('klaR')
+#install.packages('nnet')
 library(rstudioapi)
 library(ggplot2)
 library(Hmisc)
 library(randomForest)
 library(snowfall)
+library(caret)
+library(doParallel)
+library(RSNNS)
+library(e1071)
+library(klaR)
+library(nnet)
 
 #Set working directory
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -216,9 +232,6 @@ save(Xs,y,file="selected_covariates.RData")
 #variables into smaller dimension space using PCA. 
 #Will train 2 seperate PCAs, 1 for home and 1 for away team
 
-#PCA for the home team
-X <- Xs[,grep("_C$", names(Xs))]
-
 #Build PCA funtion
 PCA <- function(X,b){
   pca         <- princomp(X, cor=T, scores=T)
@@ -229,6 +242,9 @@ PCA <- function(X,b){
        loadings.rot=Rot$loadings, obj.scores.rot=scale(obj.scores)%*%Rot$rotmat)
 }
 
+#PCA for the home team
+X <- Xs[,grep("_C$", names(Xs))]
+
 #Use pca function on home team
 dims          <- 3
 pca           <- PCA(X,dims)
@@ -238,7 +254,7 @@ objs.rot.home <- pca$obj.scores.rot
 par(mfrow=c(1,2),cex=1.7)
 p <- length(pca$eigvals)
 win.graph(800,600,10)
-plot(pca$eigvals, xaxp=c(1,p,p-1), type='b',  main="Scree Plot",
+plot(pca$eigvals, xaxp=c(1,p,p-1), type='b',  main="HOme Team Scree Plot",
      xlab='Principal Components', ylab='Eigenvalues')
 lines(c(0,p+1),c(1,1),lty="dashed")
 text(pca$eigvals, as.character(round(pca$eigvals, digits=2)),
@@ -258,3 +274,158 @@ pca$loadings.rot[,1]  <- -pca$loadings.rot[,1]
 print(pca$loadings.rot, cutoff=0)
 
 #PCA for away team
+X <- Xs[,grep("_O$", names(Xs))]
+
+#Use pca function on home team
+dims          <- 3
+pca           <- PCA(X,dims)
+objs.rot.away <- pca$obj.scores.rot
+
+#Visualize PCA
+par(mfrow=c(1,2),cex=1.7)
+p <- length(pca$eigvals)
+win.graph(800,600,10)
+plot(pca$eigvals, xaxp=c(1,p,p-1), type='b',  main="Away Team Scree Plot",
+     xlab='Principal Components', ylab='Eigenvalues')
+lines(c(0,p+1),c(1,1),lty="dashed")
+text(pca$eigvals, as.character(round(pca$eigvals, digits=2)),
+     cex=0.6, pos=c(4,4,4,4,3,3))
+
+win.graph(800,600,10)
+plot(100*cumsum(pca$eigvals)/p, xaxp=c(1,p,p-1), type="b",
+     xlab='Principle Components', ylab = "CVAF (%)",
+     main='Cumulative Variance Accounted For')
+text(100*cumsum(pca$eigvals)/p,
+     as.character(round((cumsum(pca$eigvals)/p)*100, digits=1)),
+     cex=0.6, pos=c(4,4,4,2,1,1))
+
+#Change signs of first and 3 rotated componenets
+objs.rot.away[,1]     <- -objs.rot.away[,1]
+pca$loadings.rot[,1]  <- -pca$loadings.rot[,1]
+print(pca$loadings.rot, cutoff=0)
+
+Xc        <- data.frame(objs.rot.home, objs.rot.away)
+names(Xc) <- c("air.attack.home", "shot.attack.home", "defense.home",
+               "defense.away", "shot.attack.away", "counterattack.away")
+round(cor(Xc),3)
+
+#Train/test split
+set.seed(1991)
+dtset.ind <- data.frame(Xc,y)
+#Withhold 80 matches for test
+index     <- sample(1:nrow(dtset.ind),80)
+train     <- dtset.ind[-index,]
+test      <- dtset.ind[index,]
+
+####
+#Random Forest
+
+#Make rf classifier
+clus <- parallel::makeCluster(spec=6, type='PSOCK')
+registerDoParallel(clus)
+
+#For parameter controling train function, repeat cross-validation 
+#resampling method with 15 epochs with sets of 10 folds
+ctrl.train <- trainControl(method='repeatedcv', number=10,repeats=15)
+
+#Train the RF with varied mrty and store best result based on accuracy
+fit.rf <- caret::train(y ~ ., data=train, method='rf', metric='Accuracy',
+            tuneGrid=expand.grid(.mtry=1:6), trControl=ctrl.train,
+            ntree=1000)
+stopCluster(clus)
+
+#output of RFs with varying mtry parameter
+print(fit.rf)
+plot(fit.rf)
+
+#Predict on test with trained RF model
+y.rf <- predict(fit.rf$finalModel, newdata = test[,1:6], type='class')
+
+####
+#Multilayer Perceptron (MLP) Neural Network
+
+#MLP classifier with single layer of hidden neurons
+clus <- parallel::makeCluster(spec=6, type='PSOCK')
+registerDoParallel(clus)
+
+#Train MLP with varied number of hidden neurons and store best result
+fit.nnet <- caret::train(y~., data=train, method='mlp', metric='Accuracy',
+              tuneGrid=expand.grid(.size=1:15), learnFunc='SCG',
+              trControl=ctrl.train)
+stopCluster(clus)
+
+#Describe optimal NNET structure
+summary(fit.nnet$finalModel)
+
+#Predict off trained MLP
+probs.nnet <- predict(fit.nnet$finalModel, newdata=test[,1:6])
+head(probs.nnet)
+
+#Original predict output is type class probabilities
+#For test, coerce prediction result to categorical
+y.nnet <- apply(probs.nnet,1,which.max)
+y.nnet <- factor(y.nnet, levels=1:3, labels = levels(test$y))
+
+####
+#K-Nearest Neighbor (KNN)
+
+#Start KNN classifier
+clus <- parallel::makeCluster(spec=6, type = 'PSOCK')
+print(clus)
+registerDoParallel
+
+#Train KNN with k ranging from 5 to 100 and choose k w/ max accuracy
+fit.knn <- caret::train(y~., data=train, method='knn',
+              tuneGrid=expand.grid(.k=5:100), metric = 
+              "accuracy", trControl=ctrl.train)
+stopCluster(clus)
+
+#Predict using trained knn
+y.knn <- predict(fit.knn$finalModel, newdata=test[,1:6], 
+          type='class')
+
+####
+#Naive Bayesian Classifier
+
+#Train NBC
+fit.NB <- naiveBayes(y~., data=train)
+
+#Predict off trained NBC
+y.NB   <- predict(fit.NB, newdata = test[,1:6], type='class')
+
+####
+#Multinomial Logisitic Regression (MLogit Regression)
+
+#Train MLogit Reg
+fit.mlog <- multinom(y~., data=train)
+print(t(coef(fit.mlog)))
+
+#Predict on trained MLogit Reg
+y.mlog <- predict(fit.mlog, newdata = test[,1:6])
+
+#Save all classifier models in R file
+save(fit.rf, fit.nnet, fit.knn, fit.NB, fit.mlog,
+     train, test, file="Data and Dependencies/classifieres.RData")
+
+####
+#Evaluate the potential models with confusion matrix
+
+#Create list of models to itterate
+models    <- list(y.rf,y.nnet,y.knn,y.NB,y.mlog)
+modNames  <- c('rf','nnet','knn','NB','mlog')
+
+#Iterate through models and create matrix for each to compare
+for(i in 1:length(models)){
+  assign(paste('CM',modNames[i],sep='.'),
+    caret::confusionMatrix(models[[i]], test$y))
+}
+
+Accuracy <- CM.rf$overall['Accuracy']
+Kappa <- CM.rf$overall['Kappa']
+CM.rf$byClass['W','Sensitivity']
+
+
+CM.mlogit <- caret::confusionMatrix(y.mlog, test$y)
+print(CM.rf)
+
+load(file="Data and Dependencies/model_performance.RData")

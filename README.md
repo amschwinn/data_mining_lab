@@ -22,7 +22,7 @@
 	Exercise 2: Crime Analysis
 
 ## Lab3 4:
-	Exercise 1: Predict soccer match outcomes with random forests
+	Exercise 1: Predict Futbol match outcomes using Random Forests, Multilayer Perceptron Neural Network (MLP), K-Nearest Neighbor Classifiers, Naive Bayesian Classifier, and Multinomial Logisitc Regression (MLogit Regression).
 
 ### References:
 	Based on lab in Data Mining course of Machine Learning and Data Mining (MLDM) Master's Program and University Jean Monnet. Lab taught by Dr. Fabrice Muhlenbach.
