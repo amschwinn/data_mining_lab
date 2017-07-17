@@ -22,6 +22,7 @@
 #snowfall
 
 #install.packages('rstudioapi')
+#install.packages('Rcpp')
 #install.packages('ggplot2')
 #install.packages('Hmisc')
 #install.packages('randomForest')
@@ -32,7 +33,9 @@
 #install.packages('e1071')
 #install.packages('klaR')
 #install.packages('nnet')
+#install.packages('hmisc')
 library(rstudioapi)
+library(Rcpp)
 library(ggplot2)
 library(Hmisc)
 library(randomForest)
@@ -313,95 +316,118 @@ round(cor(Xc),3)
 set.seed(1991)
 dtset.ind <- data.frame(Xc,y)
 #Withhold 80 matches for test
-index     <- sample(1:nrow(dtset.ind),80)
-train     <- dtset.ind[-index,]
-test      <- dtset.ind[index,]
+index       <- sample(1:nrow(dtset.ind),80)
+dtset.train <- dtset.ind[-index,]
+dtset.test  <- dtset.ind[index,]
 
 ####
 #Random Forest
 
 #Make rf classifier
-clus <- parallel::makeCluster(spec=6, type='PSOCK')
-registerDoParallel(clus)
+my.rf <- function(train, test){
+  clus <- parallel::makeCluster(spec=6, type='PSOCK')
+  registerDoParallel(clus)
+  
+  #For parameter controling train function, repeat cross-validation 
+  #resampling method with 15 epochs with sets of 10 folds
+  ctrl.train <- trainControl(method='repeatedcv', number=10,repeats=15)
+  
+  #Train the RF with varied mrty and store best result based on accuracy
+  fit.rf <- caret::train(y ~ ., data=train, method='rf', metric='Accuracy',
+              tuneGrid=expand.grid(.mtry=1:6), trControl=ctrl.train,
+              ntree=1000)
+  stopCluster(clus)
+  
+  #output of RFs with varying mtry parameter
+  print(fit.rf)
+  plot(fit.rf)
+  
+  #Predict on test with trained RF model
+  return(predict(fit.rf$finalModel, newdata = test[,1:6], type='class'))
+}
 
-#For parameter controling train function, repeat cross-validation 
-#resampling method with 15 epochs with sets of 10 folds
-ctrl.train <- trainControl(method='repeatedcv', number=10,repeats=15)
-
-#Train the RF with varied mrty and store best result based on accuracy
-fit.rf <- caret::train(y ~ ., data=train, method='rf', metric='Accuracy',
-            tuneGrid=expand.grid(.mtry=1:6), trControl=ctrl.train,
-            ntree=1000)
-stopCluster(clus)
-
-#output of RFs with varying mtry parameter
-print(fit.rf)
-plot(fit.rf)
-
-#Predict on test with trained RF model
-y.rf <- predict(fit.rf$finalModel, newdata = test[,1:6], type='class')
+#Use random forest function to predict using RF
+y.rf <- my.rf(dtset.train,dtset.train)
 
 ####
 #Multilayer Perceptron (MLP) Neural Network
 
 #MLP classifier with single layer of hidden neurons
-clus <- parallel::makeCluster(spec=6, type='PSOCK')
-registerDoParallel(clus)
+my.nnet <- function(train,test){
+  clus <- parallel::makeCluster(spec=6, type='PSOCK')
+  registerDoParallel(clus)
+  
+  #Train MLP with varied number of hidden neurons and store best result
+  fit.nnet <- caret::train(y~., data=train, method='mlp', metric='Accuracy',
+                tuneGrid=expand.grid(.size=1:15), learnFunc='SCG',
+                trControl=ctrl.train)
+  stopCluster(clus)
+  
+  #Describe optimal NNET structure
+  summary(fit.nnet$finalModel)
+  
+  #Predict off trained MLP
+  probs.nnet <- predict(fit.nnet$finalModel, newdata=test[,1:6])
+  head(probs.nnet)
+  
+  #Original predict output is type class probabilities
+  #For test, coerce prediction result to categorical
+  out.nnet <- apply(probs.nnet,1,which.max)
+  return(factor(out.nnet, levels=1:3, labels = levels(test$y)))
+}
 
-#Train MLP with varied number of hidden neurons and store best result
-fit.nnet <- caret::train(y~., data=train, method='mlp', metric='Accuracy',
-              tuneGrid=expand.grid(.size=1:15), learnFunc='SCG',
-              trControl=ctrl.train)
-stopCluster(clus)
-
-#Describe optimal NNET structure
-summary(fit.nnet$finalModel)
-
-#Predict off trained MLP
-probs.nnet <- predict(fit.nnet$finalModel, newdata=test[,1:6])
-head(probs.nnet)
-
-#Original predict output is type class probabilities
-#For test, coerce prediction result to categorical
-y.nnet <- apply(probs.nnet,1,which.max)
-y.nnet <- factor(y.nnet, levels=1:3, labels = levels(test$y))
+#Use mlp function to predict using neural net
+y.nnet <- my.nnet(dtset.train,dtset.train)
 
 ####
 #K-Nearest Neighbor (KNN)
 
 #Start KNN classifier
-clus <- parallel::makeCluster(spec=6, type = 'PSOCK')
-print(clus)
-registerDoParallel
+my.knn <- function(train,test){
+  clus <- parallel::makeCluster(spec=6, type = 'PSOCK')
+  print(clus)
+  registerDoParallel
+  
+  #Train KNN with k ranging from 5 to 100 and choose k w/ max accuracy
+  fit.knn <- caret::train(y~., data=train, method='knn',
+                tuneGrid=expand.grid(.k=5:100), metric = 
+                "accuracy", trControl=ctrl.train)
+  stopCluster(clus)
+  
+  #Predict using trained knn
+  return(predict(fit.knn$finalModel, newdata=test[,1:6], 
+            type='class'))
+}
 
-#Train KNN with k ranging from 5 to 100 and choose k w/ max accuracy
-fit.knn <- caret::train(y~., data=train, method='knn',
-              tuneGrid=expand.grid(.k=5:100), metric = 
-              "accuracy", trControl=ctrl.train)
-stopCluster(clus)
-
-#Predict using trained knn
-y.knn <- predict(fit.knn$finalModel, newdata=test[,1:6], 
-          type='class')
+#Use knn function to predict 
+y.knn <- my.knn(dtset.train,dtset.train)
 
 ####
 #Naive Bayesian Classifier
+my.NB <- function(train,test){
+  #Train NBC
+  fit.NB <- naiveBayes(y~., data=train)
+  
+  #Predict off trained NBC
+  return(predict(fit.NB, newdata = test[,1:6], type='class'))
+}
 
-#Train NBC
-fit.NB <- naiveBayes(y~., data=train)
-
-#Predict off trained NBC
-y.NB   <- predict(fit.NB, newdata = test[,1:6], type='class')
+#Use NB function to predict
+y.NB <- my.NB(dtset.train,dtset.test)
 
 ####
 #Multinomial Logisitic Regression (MLogit Regression)
+my.mlog <- function(train,test){
+  #Train MLogit Reg
+  fit.mlog <- multinom(y~., data=train)
+  print(t(coef(fit.mlog)))
+  
+  #Predict on trained MLogit Reg
+  return(predict(fit.mlog, newdata = test[,1:6]))
+}
 
-#Train MLogit Reg
-fit.mlog <- multinom(y~., data=train)
-print(t(coef(fit.mlog)))
-
-#Predict on trained MLogit Reg
-y.mlog <- predict(fit.mlog, newdata = test[,1:6])
+#Predict using mlog function
+y.mlog <- my.mlog(dtset.train,dtset.test)
 
 #Save all classifier models in R file
 save(fit.rf, fit.nnet, fit.knn, fit.NB, fit.mlog,
@@ -410,22 +436,49 @@ save(fit.rf, fit.nnet, fit.knn, fit.NB, fit.mlog,
 ####
 #Evaluate the potential models with confusion matrix
 
-#Create list of models to itterate
-models    <- list(y.rf,y.nnet,y.knn,y.NB,y.mlog)
-modNames  <- c('rf','nnet','knn','NB','mlog')
 
-#Iterate through models and create matrix for each to compare
-for(i in 1:length(models)){
-  assign(paste('CM',modNames[i],sep='.'),
-    caret::confusionMatrix(models[[i]], test$y))
+#Initialize dictionary for results
+cmResults             <- data.frame(matrix(NA, nrow=5, 
+                            ncol=7))
+colnames(cmResults)   <- c('model', 'itter','acc', 'kappa',
+                           'sensW','sensL','sensD')
+modNames              <- c('rf','nnet','knn','NB','mlog')
+
+#Iterate through models and store results to compare
+x <- 1
+#Run 100 variations
+for(i in 1:2){
+  #Create new train/test split
+  index       <- sample(1:nrow(dtset.ind),80)
+  dtset.train <- dtset.ind[-index,]
+  dtset.test  <- dtset.ind[index,]
+  
+  #Use each of the model functions for each iteration
+  y.rf    <- my.rf(dtset.train,dtset.test)
+  y.nnet  <- my.nnet(dtset.train,dtset.test)
+  y.knn   <- my.knn(dtset.train,dtset.test)
+  y.NB    <- my.NB(dtset.train,dtset.test)
+  y.mlog  <- my.mlog(dtset.train,dtset.test)
+  
+  #Predict on new variation
+  models    <- list(y.rf,y.nnet,y.knn,y.NB,y.mlog)
+  #Results for each model
+  for(j in 1:length(models)){
+    cMat                  <- caret::confusionMatrix(models[[j]], 
+                                dtset.test$y)
+    cmResults [x,'model'] <- modNames[j]
+    cmResults [x,'itter'] <- i
+    cmResults [x,'acc']   <- cMat$overall['Accuracy']
+    cmResults [x,'kappa'] <- cMat$overall['Kappa']
+    cmResults [x,'sensW'] <- data.frame(cMat$byClass)$Sensitivity[1]
+    cmResults [x,'sensL'] <- data.frame(cMat$byClass)$Sensitivity[2]
+    cmResults [x,'sensD'] <- data.frame(cMat$byClass)$Sensitivity[3]
+    x                     <- x+1
+  }
 }
 
-Accuracy <- CM.rf$overall['Accuracy']
-Kappa <- CM.rf$overall['Kappa']
-CM.rf$byClass['W','Sensitivity']
+#Save results
+write.csv(cmResults,"Data and Dependencies/cmResults.csv")
 
-
-CM.mlogit <- caret::confusionMatrix(y.mlog, test$y)
-print(CM.rf)
 
 load(file="Data and Dependencies/model_performance.RData")
