@@ -320,6 +320,10 @@ index       <- sample(1:nrow(dtset.ind),80)
 dtset.train <- dtset.ind[-index,]
 dtset.test  <- dtset.ind[index,]
 
+#For parameter controling train function, repeat cross-validation 
+#resampling method with 15 epochs with sets of 10 folds
+ctrl.train <- trainControl(method='repeatedcv', number=10,repeats=15)
+
 ####
 #Random Forest
 
@@ -327,10 +331,6 @@ dtset.test  <- dtset.ind[index,]
 my.rf <- function(train, test){
   clus <- parallel::makeCluster(spec=6, type='PSOCK')
   registerDoParallel(clus)
-  
-  #For parameter controling train function, repeat cross-validation 
-  #resampling method with 15 epochs with sets of 10 folds
-  ctrl.train <- trainControl(method='repeatedcv', number=10,repeats=15)
   
   #Train the RF with varied mrty and store best result based on accuracy
   fit.rf <- caret::train(y ~ ., data=train, method='rf', metric='Accuracy',
@@ -444,10 +444,19 @@ colnames(cmResults)   <- c('model', 'itter','acc', 'kappa',
                            'sensW','sensL','sensD')
 modNames              <- c('rf','nnet','knn','NB','mlog')
 
+####
+#NOTE: 
+#This loop takes a long time to run. As an alternative,
+# my results are saved as a CSV that can be loaded here:
+#cmResults <- read.csv("Data and Dependencies/cmResults.csv")
+#If loading previous results, skip to line 489 past
+# saving results from the loop
+####
+
 #Iterate through models and store results to compare
 x <- 1
 #Run 100 variations
-for(i in 1:2){
+for(i in 1:100){
   #Create new train/test split
   index       <- sample(1:nrow(dtset.ind),80)
   dtset.train <- dtset.ind[-index,]
@@ -481,4 +490,3 @@ for(i in 1:2){
 write.csv(cmResults,"Data and Dependencies/cmResults.csv")
 
 
-load(file="Data and Dependencies/model_performance.RData")
