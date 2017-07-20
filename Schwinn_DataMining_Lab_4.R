@@ -34,6 +34,7 @@
 #install.packages('klaR')
 #install.packages('nnet')
 #install.packages('hmisc')
+#install.packages('raster')
 library(rstudioapi)
 library(Rcpp)
 library(ggplot2)
@@ -46,6 +47,7 @@ library(RSNNS)
 library(e1071)
 library(klaR)
 library(nnet)
+library(raster)
 
 #Set working directory
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -489,4 +491,123 @@ for(i in 1:100){
 #Save results
 write.csv(cmResults,"Data and Dependencies/cmResults.csv")
 
+####
+#Compare the differenet algorithms to see what model predicts
+#the best results
+cmResults <- read.csv("Data and Dependencies/cmResults.csv")
 
+#Prepare acc/kappa data to proper df format for plot
+acc_kap_box <- data.frame("model"=factor(rep(1:5,200),labels=c("RF",
+                "NNET","KNN","NBayes","MLogit")),"metric"=factor(
+                c(rep(1,nrow(cmResults)),rep(2,nrow(cmResults))),
+                labels=c("Accuracy","Kappa")),"perf"=c(cmResults$acc,
+                cmResults$kappa))
+
+#Create box/whisker plot with accuracy and kappa
+acc_kap_plot <- ggplot(aes(y=perf,x=model), data=acc_kap_box)+
+                  geom_boxplot(aes(fill=model))+
+                  coord_flip()+
+                  facet_wrap(~metric,ncol=1,scales="fixed")+
+                  scale_fill_discrete(guide=F)+
+                  scale_x_discrete(name="")+scale_y_continuous(name="")+
+                  theme(text=element_text(size=24))
+print(acc_kap_plot)        
+
+#Prepare acc/kappa data to proper df format for plot
+sens_box <- data.frame("model"=factor(rep(1:5,300),labels=c("RF",
+              "NNET","KNN","NBayes","MLogit")),"metric"=factor(
+              c(rep(1,nrow(cmResults)),rep(2,nrow(cmResults)),
+              rep(3,nrow(cmResults))),labels=c("Sensitivity W",
+              "Sensitivity L","Sensitivity D")),"perf"=c(cmResults$sensW,
+              cmResults$sensL,cmResults$sensD))
+
+#Box/whisker plot for sensitivity
+sens_plot <- ggplot(aes(y=perf,x=model), data=sens_box)+
+                geom_boxplot(aes(fill=model))+
+                coord_flip()+
+                facet_wrap(~metric,ncol=1,scales="fixed")+
+                scale_fill_discrete(guide=F)+
+                scale_x_discrete(name="")+scale_y_continuous(name="")+
+                theme(text=element_text(size=24))
+print(sens_plot)  
+
+#create table of mean, standard deviation. and coefficient of
+#variation from results accuracy and kappa
+accKap <- cbind(aggregate(cmResults[,c('acc','kappa')],list(cmResults$model),mean),
+            aggregate(cmResults[,c('acc','kappa')],list(cmResults$model),sd)[,2:3],
+            aggregate(cmResults[,c('acc','kappa')],list(cmResults$model),cv)[,2:3])
+
+#Label
+rownames(accKap)  <- accKap$Group.1
+accKap            <- accKap[,2:ncol(accKap)]
+colnames(accKap)  <- c("Acc.AVG","Kappa.AVG","Acc.STDV","Kappa.STDV",
+                       "Acc.CV","Kappa.CV")
+
+#Compare accuracy and kappa average, standard deviation, coeff of var
+print(accKap)
+
+#create table of mean, standard deviation. and coefficient of
+#variation from results of Win, Loss, and Draw Sensitivities
+sens <- cbind(aggregate(cmResults[,c('sensW','sensL','sensD')],list(cmResults$model),mean),
+          aggregate(cmResults[,c('sensW','sensL','sensD')],list(cmResults$model),sd)[,2:4],
+          aggregate(cmResults[,c('sensW','sensL','sensD')],list(cmResults$model),cv)[,2:4])
+
+#Label
+rownames(sens)  <- sens$Group.1
+sens            <- sens[,2:ncol(sens)]
+colnames(sens)  <- c("SensW.AVG","SensL.AVG",'SensD.avg',"SensW.STDV","SensL.STDV",
+                     'SensD.STDV',"SensW.CV","SensL.CV",'SensD.CV')
+
+
+#Compare accuracy and kappa average, standard deviation, coeff of var
+print(sens)
+
+#As we compare results, it looks like MLogit has the best accuracry and spread
+#For sensitivitiy, the field is pretty even but it looks like MLogit
+#still slightly outperforms the other models so we will use 
+#MLogit going forward as it is the best balance between accuracy,
+#simplicity, and stability
+#Additionally, it is interesting that MLogit, an intrinsicly linear
+#model outperforms more complex models. This alludes to the data
+#following at least somewhat of a linear trend.
+
+####
+#Model Redefinement
+
+#Our case study is not strongly imbalanced so we are going to adjust weights
+#slightly. W freq is about 2x L and D so adjust home team win to .5 weight 
+#of L and D weighted at 1
+weight                      <- rep(1,length(dtset.train$y))
+weight[dtset.train$y=="W"]  <- .5
+
+#Fit model
+fit.mlogit.bal <- multinom(y~., weights=weight, data=dtset.train)
+
+#Compute relative risk ratios
+print(t(exp(coef(fit.mlogit.bal))))
+
+#Predict using MLogit model
+y.mlogit.bal  <- predict(fit.mlogit.bal, newdata=dtset.test)
+CM.mlogit     <- caret::confusionMatrix(y.mlogit.bal, dtset.test$y)
+print(CM.mlogit)
+
+#The accuracy of the model stayed close to level and improved the loss
+#sensitivity but slightly worsened W sensitivity
+
+####
+#Deployment
+
+#Now that have the fitted model, final step is to extract some insightful
+#information about key factors that affect match outcome. We will use
+#relative risk ratio for this
+
+#Compute relative risk ratios
+cf.mlogit <- coef(fit.mlogit.bal)
+t(exp(cf.mlogit))
+
+#Results show that shot attack home decreases the change of losing the most
+#which makes sense that the more the home team shoots, the more
+#likely they are to win. Interestingly, shot attacks seem to decrease the 
+#home teams chance of winning, so this could be one strategy for the 
+#home team to avoid. Away team attack shots has the biggest impact on losing
+#but this is out of team's control
