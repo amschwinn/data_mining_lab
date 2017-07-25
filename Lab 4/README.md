@@ -36,7 +36,5 @@
 		Link to data portal: https://data.cityofchicago.org/
 		Link to data set: https://data.cityofchicago.org/api/views/6zsd-86xi/rows.csv?accessType=DOWNLOAD&bom=true&query=select+*
 
-	Movie data provided by MovieLense.
-
 	MLDM Program Webpage: http://mldm.univ-st-etienne.fr/
 

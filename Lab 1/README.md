@@ -18,10 +18,10 @@
 	Exercise 2: Association rule visualization on Last.fm dataset
 
 ## Lab 3:
-	Exercise 1: Recommender systems using movie ratings from MovieLense
-	Exercise 2: Crime Analysis from City of Chicago's Data Portal
+	Exercise 1: Recommender systems
+	Exercise 2: Crime Analysis
 
-## Lab 4:
+## Lab3 4:
 	Exercise 1: Predict Futbol match outcomes using Random Forests, Multilayer Perceptron Neural Network (MLP), K-Nearest Neighbor Classifiers, Naive Bayesian Classifier, and Multinomial Logisitc Regression (MLogit Regression).
 
 ### References:
@@ -35,8 +35,6 @@
 	Crime analysis data made available by City of Chicago Data Portal
 		Link to data portal: https://data.cityofchicago.org/
 		Link to data set: https://data.cityofchicago.org/api/views/6zsd-86xi/rows.csv?accessType=DOWNLOAD&bom=true&query=select+*
-
-	Movie data provided by MovieLense.
 
 	MLDM Program Webpage: http://mldm.univ-st-etienne.fr/
 

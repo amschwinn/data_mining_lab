@@ -1,7 +1,8 @@
 #############################
 #Data Mining Practical Session
+#Lab 4 Exercise 1
 #
-#Subject: RPredict Futbol match outcomes using 
+#Subject: Predict Futbol match outcomes using 
 #Random Forests, Multilayer Perceptron Neural 
 #Network (MLP), K-Nearest Neighbor Classifiers, 
 #Naive Bayesian Classifier, and Multinomial 
@@ -11,10 +12,6 @@
 #
 #Feb 8, 2017
 #############################
-#############################
-#Exercise 1: 
-#Football data mining
-
 
 #Visualization
 #descriptive statistics
