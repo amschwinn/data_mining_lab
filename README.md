@@ -24,6 +24,10 @@
 ## Lab 4:
 	Exercise 1: Predict Futbol match outcomes using Random Forests, Multilayer Perceptron Neural Network (MLP), K-Nearest Neighbor Classifiers, Naive Bayesian Classifier, and Multinomial Logisitc Regression (MLogit Regression).
 
+## Lab 5:
+	Exercise 1: Efficiently working in R
+	Exercise 2: Databases in R: SQL, MySQL, and NoSQL.
+	
 ### References:
 	Based on lab in Data Mining course of Machine Learning and Data Mining (MLDM) Master's Program and University Jean Monnet. Lab taught by Dr. Fabrice Muhlenbach.
 
@@ -37,6 +41,11 @@
 		Link to data set: https://data.cityofchicago.org/api/views/6zsd-86xi/rows.csv?accessType=DOWNLOAD&bom=true&query=select+*
 
 	Movie data provided by MovieLense.
+
+	Futbol Data Provided by Panini Digital futbol database for 2010-20100 Serie A Season. Panini Digital is a leader in the collection of statistical data on futbol, providing data services to clubs and the media. The fubtol database contains detailed information about plays made during each match (free kicks and shots, fouls, crosses, recovered balls, goal assists, average time of ball possessio, saves goals on free kicks, etc). www.paninidigital.com
+
+	Code compiling section of lab 5 exercise 1 is based on: 
+		Gillespie, C. and R. Lovelace (2017). Efficient R Programming – A Practical Guide to Smarter Programming. O’Reilly.
 
 	MLDM Program Webpage: http://mldm.univ-st-etienne.fr/
 
